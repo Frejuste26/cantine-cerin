@@ -1,37 +1,27 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
 import authService from '@/services/auth';
 
 const router = useRouter();
-const authStore = useAuthStore();
 
 const formData = ref({
-  username: '',
-  password: ''
+  email: ''
 });
 
 const error = ref('');
+const success = ref('');
 const isLoading = ref(false);
 
 // Validation des champs
-const usernameError = computed(() => {
-  if (!formData.value.username) return '';
-  // Vous pouvez ajouter des règles de validation spécifiques pour le nom d'utilisateur ici si nécessaire
-  return formData.value.username.length < 3 ? 'Le nom d\'utilisateur doit contenir au moins 3 caractères' : '';
-});
-
-const passwordError = computed(() => {
-  if (!formData.value.password) return '';
-  return formData.value.password.length < 6 ? 'Le mot de passe doit contenir au moins 6 caractères' : '';
+const emailError = computed(() => {
+  if (!formData.value.email) return '';
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return !emailRegex.test(formData.value.email) ? 'Veuillez entrer une adresse email valide' : '';
 });
 
 const isFormValid = computed(() => {
-  return formData.value.username && 
-         formData.value.password && 
-         !usernameError.value && 
-         !passwordError.value;
+  return formData.value.email && !emailError.value;
 });
 
 const handleSubmit = async () => {
@@ -43,67 +33,63 @@ const handleSubmit = async () => {
   try {
     isLoading.value = true;
     error.value = '';
+    success.value = '';
     
-    // Appel au service d'authentification (qui gère maintenant les cookies)
-    await authService.login(formData.value.username, formData.value.password);
+    // Simulation d'un appel API pour réinitialiser le mot de passe
+    // À remplacer par un véritable appel à votre service d'authentification
+    // await authService.resetPassword(formData.value.email);
     
-    // Initialisation de l'authentification pour récupérer les données utilisateur
-    await authStore.initializeAuth();
+    // Simulons une réponse positive
+    setTimeout(() => {
+      success.value = 'Un email de réinitialisation a été envoyé à votre adresse email.';
+      isLoading.value = false;
+    }, 1500);
     
-    // Redirection vers la page demandée ou la page d'accueil
-    const redirectPath = router.currentRoute.value.query.redirect || '/';
-    router.push(redirectPath);
   } catch (err) {
     error.value = err.message;
-  } finally {
     isLoading.value = false;
   }
-}
+};
+
+const goToLogin = () => {
+  router.push('/login');
+};
 </script>
 
 <template>
-  <main id="login-container">
-    <h1>Login</h1>
-    <form id="login-form" @submit.prevent="handleSubmit">
+  <main id="reset-password-container">
+    <h1>Réinitialisation du mot de passe</h1>
+    <form id="reset-password-form" @submit.prevent="handleSubmit">
       <div v-if="error" class="error-message">
         {{ error }}
       </div>
-      <div class="form-group">
-        <input 
-          type="text" 
-          id="username" 
-          v-model="formData.username" 
-          placeholder=" " 
-          required
-          :class="{ 'error': usernameError }"
-        >
-        <label for="username" class="floating-label">Nom d'utilisateur</label>
-        <span v-if="usernameError" class="error-text">{{ usernameError }}</span>
+      <div v-if="success" class="success-message">
+        {{ success }}
       </div>
       <div class="form-group">
         <input 
-          type="password" 
-          id="password" 
-          v-model="formData.password" 
+          type="email" 
+          id="email" 
+          v-model="formData.email" 
           placeholder=" " 
           required
-          :class="{ 'error': passwordError }"
+          :class="{ 'error': emailError }"
         >
-        <label for="password" class="floating-label">Mot de passe</label>
-        <span v-if="passwordError" class="error-text">{{ passwordError }}</span>
+        <label for="email" class="floating-label">Adresse email</label>
+        <span v-if="emailError" class="error-text">{{ emailError }}</span>
       </div>
       <button type="submit" :disabled="isLoading">
-        {{ isLoading ? 'Connexion en cours...' : 'Se connecter' }}
+        {{ isLoading ? 'Envoi en cours...' : 'Réinitialiser le mot de passe' }}
       </button>
-      <div class="forgot-password">
-        <router-link to="/reset-password">Mot de passe oublié ?</router-link>
+      <div class="login-link">
+        <a href="#" @click.prevent="goToLogin">Retour à la connexion</a>
       </div>
     </form>
   </main>
 </template>
 
 <style scoped>
-#login-container {
+#reset-password-container {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -117,7 +103,7 @@ const handleSubmit = async () => {
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-#login-container:hover {
+#reset-password-container:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 25px rgba(0, 0, 0, 0.1);
 }
@@ -131,7 +117,7 @@ h1 {
   letter-spacing: -0.5px;
 }
 
-#login-form {
+#reset-password-form {
   width: 100%;
 }
 
@@ -144,6 +130,16 @@ h1 {
 .error-message {
   background-color: #fee2e2;
   color: #dc2626;
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  width: 100%;
+}
+
+.success-message {
+  background-color: #d1fae5;
+  color: #047857;
   padding: 0.75rem;
   border-radius: 0.375rem;
   margin-bottom: 1rem;
@@ -167,19 +163,19 @@ input.error:focus {
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
 }
 
-.forgot-password {
+.login-link {
   text-align: center;
   margin-top: 1rem;
 }
 
-.forgot-password a {
+.login-link a {
   color: var(--orange-400);
   text-decoration: none;
   font-size: 0.9rem;
   transition: color 0.3s ease;
 }
 
-.forgot-password a:hover {
+.login-link a:hover {
   color: var(--orange-500);
   text-decoration: underline;
 }
@@ -257,26 +253,5 @@ button:hover {
 button:active {
   transform: translateY(0);
   box-shadow: none;
-}
-
-.register-link {
-  margin-top: 2rem;
-  text-align: center;
-  color: #666;
-  font-size: 0.95rem;
-}
-
-.register-link a {
-  color: var(--orange-300);
-  text-decoration: none;
-  font-weight: 600;
-  transition: all 0.2s ease;
-  padding: 0.2rem 0;
-  border-bottom: 1px solid transparent;
-}
-
-.register-link a:hover {
-  color: var(--orange-400);
-  border-bottom-color: var(--orange-400);
 }
 </style>

@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
 import Meal from '@/services/meal';
+import OrderService from '@/services/order';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -12,34 +13,85 @@ const orders = ref([]);
 const activeTab = ref('meals');
 const isLoading = ref(false);
 const error = ref(null);
+const updatingOrder = ref(null);
 
 onMounted(async () => {
-  if (!authStore.isAdmin) {
-    router.push('/');
+  if (!authStore.isAuthenticated || !authStore.isAdmin) {
+    router.push('/login');
     return;
   }
 
+  await loadData();
+});
+
+const loadData = async () => {
   try {
     isLoading.value = true;
-    meals.value = await Meal.getAll();
-    // TODO: Implémenter la récupération des commandes
-    // orders.value = await Order.getAll();
+    error.value = null;
+    
+    if (activeTab.value === 'meals') {
+      meals.value = await Meal.getAll();
+    } else if (activeTab.value === 'orders') {
+      orders.value = await OrderService.getAllOrders();
+    }
   } catch (err) {
     error.value = 'Erreur lors du chargement des données';
     console.error(err);
   } finally {
     isLoading.value = false;
   }
-});
+};
+
+const switchTab = (tab) => {
+  activeTab.value = tab;
+  loadData();
+};
 
 const deleteMeal = async (mealId) => {
+  if (!confirm('Êtes-vous sûr de vouloir supprimer ce plat ?')) {
+    return;
+  }
+  
   try {
     await Meal.delete(mealId);
-    meals.value = meals.value.filter(meal => meal.id !== mealId);
+    await loadData(); // Recharger les données
   } catch (err) {
     error.value = 'Erreur lors de la suppression du plat';
     console.error(err);
   }
+};
+
+const updateOrderStatus = async (orderId, status) => {
+  try {
+    updatingOrder.value = orderId;
+    await OrderService.updateOrderStatus(orderId, status);
+    await loadData(); // Recharger les données
+  } catch (err) {
+    error.value = 'Erreur lors de la mise à jour du statut';
+    console.error(err);
+  } finally {
+    updatingOrder.value = null;
+  }
+};
+
+const getStatusText = (status) => {
+  const statusTexts = {
+    pending: 'En attente',
+    processing: 'En cours',
+    completed: 'Terminée',
+    cancelled: 'Annulée'
+  };
+  return statusTexts[status] || status;
+};
+
+const formatDate = (date) => {
+  return new Date(date).toLocaleDateString('fr-FR', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 };
 </script>
 
@@ -50,13 +102,13 @@ const deleteMeal = async (mealId) => {
     <div class="tabs">
       <button 
         :class="['tab-button', { active: activeTab === 'meals' }]"
-        @click="activeTab = 'meals'"
+        @click="switchTab('meals')"
       >
         Gestion des Plats
       </button>
       <button 
         :class="['tab-button', { active: activeTab === 'orders' }]"
-        @click="activeTab = 'orders'"
+        @click="switchTab('orders')"
       >
         Gestion des Commandes
       </button>
@@ -101,22 +153,25 @@ const deleteMeal = async (mealId) => {
 
       <!-- Gestion des Commandes -->
       <div v-if="activeTab === 'orders'" class="orders-management">
+        <div v-if="orders.length === 0 && !isLoading" class="no-orders">
+          <p>Aucune commande trouvée.</p>
+        </div>
         <div class="orders-list">
           <div v-for="order in orders" :key="order.id" class="order-item">
             <div class="order-header">
               <h3>Commande #{{ order.id }}</h3>
-              <span :class="['status', order.status]">{{ order.status }}</span>
+              <span :class="['status', order.status]">{{ getStatusText(order.status) }}</span>
             </div>
             <div class="order-details">
-              <p>Client: {{ order.user.name }}</p>
-              <p>Date: {{ new Date(order.createdAt).toLocaleString() }}</p>
-              <p>Total: {{ order.total }} XOF</p>
+              <p><strong>Client:</strong> {{ order.user?.name || 'N/A' }}</p>
+              <p><strong>Date:</strong> {{ formatDate(order.createdAt) }}</p>
+              <p><strong>Total:</strong> {{ order.total }} XOF</p>
             </div>
             <div class="order-items">
               <h4>Articles:</h4>
               <ul>
                 <li v-for="item in order.items" :key="item.id">
-                  {{ item.quantity }}x {{ item.meal.designation }}
+                  {{ item.quantity }}x {{ item.meal?.designation || 'Plat supprimé' }} - {{ item.price }} XOF
                 </li>
               </ul>
             </div>
@@ -124,14 +179,28 @@ const deleteMeal = async (mealId) => {
               <button 
                 v-if="order.status === 'pending'"
                 @click="updateOrderStatus(order.id, 'processing')"
+                :disabled="updatingOrder === order.id"
+                class="btn-primary"
               >
-                Traiter
+                <span v-if="updatingOrder === order.id" class="spinner"></span>
+                {{ updatingOrder === order.id ? 'Traitement...' : 'Traiter' }}
               </button>
               <button 
                 v-if="order.status === 'processing'"
                 @click="updateOrderStatus(order.id, 'completed')"
+                :disabled="updatingOrder === order.id"
+                class="btn-success"
               >
-                Terminer
+                <span v-if="updatingOrder === order.id" class="spinner"></span>
+                {{ updatingOrder === order.id ? 'Finalisation...' : 'Terminer' }}
+              </button>
+              <button 
+                v-if="order.status === 'pending' || order.status === 'processing'"
+                @click="updateOrderStatus(order.id, 'cancelled')"
+                :disabled="updatingOrder === order.id"
+                class="btn-danger"
+              >
+                Annuler
               </button>
             </div>
           </div>
@@ -234,10 +303,66 @@ const deleteMeal = async (mealId) => {
 
 .meal-actions button, .order-actions button {
   padding: var(--spacing-sm) var(--spacing-md);
+  margin-right: var(--spacing-sm);
   border: none;
   border-radius: var(--border-radius);
   cursor: pointer;
-  transition: all var(--transition-duration) var(--transition-timing);
+  transition: all 0.3s;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.btn-primary {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-dark);
+}
+
+.btn-success {
+  background: #28a745;
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: #218838;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.order-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.no-orders {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--text-muted);
 }
 
 .meal-actions button.delete {

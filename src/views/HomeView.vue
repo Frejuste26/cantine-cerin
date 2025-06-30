@@ -1,36 +1,133 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import Meal from '../services/meal.js';
 import OrderForm from '../components/OrderForm.vue';
 import MealModal from '../components/MealModal.vue';
 import checkoutService from '../services/checkout.js';
 import { useCartStore } from '../stores/cart';
+import { useAuthStore } from '../stores/auth';
 import NavBar from '../components/NavBar.vue';
 
 const router = useRouter();
 const cartStore = useCartStore();
+const authStore = useAuthStore();
 
 const meals = ref([]);
 const filteredMeals = ref([]);
 const showOrderForm = ref(false);
 const selectedMeal = ref(null);
 const showMealModal = ref(false);
+const searchQuery = ref('');
 
+// Nouvelles variables pour les filtres et favoris
+const selectedCategory = ref('all');
+const favorites = ref([]);
+const showFavoritesOnly = ref(false);
+
+// Catégories de repas (à adapter selon vos besoins)
+const categories = [
+  { id: 'all', name: 'Tous les plats' },
+  { id: 'main', name: 'Plats principaux' },
+  { id: 'dessert', name: 'Desserts' },
+  { id: 'drink', name: 'Boissons' },
+  { id: 'starter', name: 'Entrées' }
+];
+
+// Chargement des repas et des favoris depuis le localStorage
 onMounted(async () => {
   try {
     meals.value = await Meal.getAll();
-    filteredMeals.value = meals.value;
+    
+    // Simuler des catégories pour les repas (à remplacer par des données réelles)
+    meals.value.forEach((meal, index) => {
+      // Assigner des catégories aléatoires pour la démonstration
+      const categoryIds = ['main', 'dessert', 'drink', 'starter'];
+      meal.category = categoryIds[index % categoryIds.length];
+      meal.isFavorite = false;
+    });
+    
+    // Charger les favoris depuis localStorage
+    const storedFavorites = localStorage.getItem('mealFavorites');
+    if (storedFavorites) {
+      favorites.value = JSON.parse(storedFavorites);
+      // Marquer les repas favoris
+      meals.value.forEach(meal => {
+        meal.isFavorite = favorites.value.includes(meal.id);
+      });
+    }
+    
+    applyFilters();
   } catch (error) {
     console.error('Erreur lors du chargement des repas:', error);
   }
 });
 
+// Fonction pour appliquer tous les filtres (recherche, catégorie, favoris)
+const applyFilters = () => {
+  let result = meals.value;
+  
+  // Filtre par texte de recherche
+  if (searchQuery.value) {
+    result = result.filter(meal =>
+      meal.designation.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+      meal.description.toLowerCase().includes(searchQuery.value.toLowerCase())
+    );
+  }
+  
+  // Filtre par catégorie
+  if (selectedCategory.value !== 'all') {
+    result = result.filter(meal => meal.category === selectedCategory.value);
+  }
+  
+  // Filtre par favoris
+  if (showFavoritesOnly.value) {
+    result = result.filter(meal => meal.isFavorite);
+  }
+  
+  filteredMeals.value = result;
+};
+
+// Fonction de recherche mise à jour
 const searchMeals = (query) => {
-  filteredMeals.value = meals.value.filter(meal =>
-    meal.designation.toLowerCase().includes(query.toLowerCase()) ||
-    meal.description.toLowerCase().includes(query.toLowerCase())
-  );
+  searchQuery.value = query;
+  applyFilters();
+};
+
+// Fonction pour changer de catégorie
+const changeCategory = (categoryId) => {
+  selectedCategory.value = categoryId;
+  applyFilters();
+};
+
+// Fonction pour basculer l'affichage des favoris uniquement
+const toggleFavoritesFilter = () => {
+  showFavoritesOnly.value = !showFavoritesOnly.value;
+  applyFilters();
+};
+
+// Fonction pour ajouter/retirer un repas des favoris
+const toggleFavorite = (meal) => {
+  meal.isFavorite = !meal.isFavorite;
+  
+  if (meal.isFavorite) {
+    if (!favorites.value.includes(meal.id)) {
+      favorites.value.push(meal.id);
+    }
+  } else {
+    const index = favorites.value.indexOf(meal.id);
+    if (index !== -1) {
+      favorites.value.splice(index, 1);
+    }
+  }
+  
+  // Sauvegarder dans localStorage
+  localStorage.setItem('mealFavorites', JSON.stringify(favorites.value));
+  
+  // Réappliquer les filtres si on affiche uniquement les favoris
+  if (showFavoritesOnly.value) {
+    applyFilters();
+  }
 };
 
 const formatPrice = cartStore.formatPrice;
@@ -46,6 +143,10 @@ const view = (meal) => {
 
 const handleOrderSubmit = async (orderDetails) => {
   try {
+    if (!authStore.isAuthenticated) {
+      router.push({ name: 'login', query: { redirect: router.currentRoute.value.fullPath } });
+      return;
+    }
     await checkoutService.createCheckoutSession(cartStore.total);
   } catch (error) {
     console.error('Erreur lors du processus de paiement:', error);
@@ -69,14 +170,13 @@ const handleOrderSubmit = async (orderDetails) => {
         </div>
         <div class="cart-total">
           <h4>Total: {{ formatPrice(cartStore.total) }}</h4>
-          <button class="checkout-button" @click="showOrderForm = true; cartStore.toggleCart()">Commander</button>
+          <button class="checkout-button" @click="authStore.isAuthenticated ? (showOrderForm = true, cartStore.toggleCart()) : router.push({ name: 'login', query: { redirect: $route.fullPath } })">Commander</button>
         </div>
       </div>
       <div v-else class="empty-cart">
         Votre panier est vide
       </div>
     </div>
-
 
     <OrderForm
       v-if="showOrderForm"
@@ -93,25 +193,59 @@ const handleOrderSubmit = async (orderDetails) => {
       @close="showMealModal = false"
     />
 
+    <!-- Filtres et catégories -->
+    <div class="filters-container">
+      <div class="categories-filter">
+        <button 
+          v-for="category in categories" 
+          :key="category.id"
+          @click="changeCategory(category.id)"
+          :class="['category-button', { active: selectedCategory === category.id }]"
+        >
+          {{ category.name }}
+        </button>
+      </div>
+      
+      <div class="favorites-filter">
+        <button 
+          @click="toggleFavoritesFilter"
+          :class="['favorites-button', { active: showFavoritesOnly }]"
+        >
+          <span v-if="showFavoritesOnly">❤️ Tous les plats</span>
+          <span v-else>🤍 Favoris uniquement</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Résultats de recherche -->
+    <div v-if="filteredMeals.length === 0" class="no-results">
+      <p>Aucun plat ne correspond à vos critères de recherche.</p>
+    </div>
+
     <div class="menu-box">
       <div class="menu-item" v-for="(meal, index) in filteredMeals" :key="index">
         <div class="menu-card">
           <div class="menu-card-image">
             <img :src="meal.imagePath" alt="Meal Image" class="meal-image">
+            <button @click="toggleFavorite(meal)" class="favorite-toggle">
+              <span v-if="meal.isFavorite">❤️</span>
+              <span v-else>🤍</span>
+            </button>
           </div>     
           <div class="menu-card-content">
             <div class="product-title">
               <h3>{{ meal.designation }}</h3>
               <span v-if="meal.availability === 0" class="stock-badge">Rupture</span>
+              <span class="category-tag">{{ categories.find(c => c.id === meal.category)?.name }}</span>
             </div>
             <p>Prix: {{ formatPrice(meal.price) }}</p>
           </div>  
           <div class="menu-footer">
-            <button @click="addToCart(meal)">ajouter</button>
-            <button @click="view(meal)">plus</button>
+            <button @click="addToCart(meal)" class="add-cart-button">Ajouter</button>
+            <button @click="view(meal)" class="view-details-button">Détails</button>
           </div> 
         </div>
-    </div>
+      </div>
     </div>
   </div>
 </template>
@@ -162,6 +296,97 @@ const handleOrderSubmit = async (orderDetails) => {
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   border: var(--border-width) var(--border-style) var(--border-color);
   position: relative;
+}
+
+/* Styles pour les filtres et catégories */
+.filters-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+  padding: 0 var(--spacing-lg);
+}
+
+.categories-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.category-button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.category-button.active {
+  background-color: var(--primary);
+  color: var(--white);
+  border-color: var(--primary);
+}
+
+.favorites-filter {
+  margin-bottom: var(--spacing-md);
+}
+
+.favorites-button {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background-color: var(--white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.favorites-button.active {
+  background-color: #ff6b6b;
+  color: var(--white);
+  border-color: #ff6b6b;
+}
+
+.no-results {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--text-muted);
+}
+
+/* Style pour le bouton de favoris */
+.favorite-toggle {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  background: rgba(255, 255, 255, 0.8);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 2;
+}
+
+.favorite-toggle:hover {
+  transform: scale(1.1);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+/* Style pour l'étiquette de catégorie */
+.category-tag {
+  display: inline-block;
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  margin-left: var(--spacing-sm);
+  background-color: var(--light);
+  border-radius: 12px;
+  color: var(--text-muted);
 }
 
 .menu-card:hover {

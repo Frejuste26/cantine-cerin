@@ -14,11 +14,13 @@ const router = createRouter({
       path: '/payment/success',
       name: 'payment-success',
       component: () => import('../views/PaymentSuccessView.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/payment/error',
       name: 'payment-error',
       component: () => import('../views/PaymentErrorView.vue'),
+      meta: { requiresAuth: true },
     },
     {
       path: '/login',
@@ -26,14 +28,20 @@ const router = createRouter({
       component: () => import('../views/Auth/LoginView.vue'),
     },
     {
-      path: '/register',
-      name: 'register',
-      component: () => import('../views/Auth/RegisterView.vue'),
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('../views/ResetPasswordView.vue'),
     },
     {
       path: '/profile',
       name: 'profile',
       component: () => import('../views/Auth/ProfileView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/profile/edit',
+      name: 'edit-profile',
+      component: () => import('../views/EditProfileView.vue'),
       meta: { requiresAuth: true },
     },
     {
@@ -43,23 +51,49 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/order/:id/review',
+      name: 'order-review',
+      component: () => import('../views/OrderReviewView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/admin',
       name: 'admin',
       component: () => import('../views/Admin/DashboardView.vue'),
       meta: { requiresAuth: true, requiresAdmin: true },
     },
-    {
-      path: '/register',
-      name: 'register',
-      component: () => import('../views/Auth/RegisterView.vue'),
-    },
-    {
-      path: '/profile',
-      name: 'profile',
-      component: () => import('../views/Auth/ProfileView.vue'),
-    }
   ],
 
 })
+
+// Navigation Guards
+router.beforeEach(async (to, from, next) => {
+  const authStore = useAuthStore();
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth);
+  const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
+
+  // Si la route nécessite une authentification
+  if (requiresAuth) {
+    // Vérifier si l'utilisateur est authentifié
+    if (!authStore.isAuthenticated) {
+      next({ name: 'login', query: { redirect: to.fullPath } });
+      return;
+    }
+
+    // Vérifier les permissions admin si nécessaire
+    if (requiresAdmin && !authStore.isAdmin) {
+      next({ name: 'home' });
+      return;
+    }
+  }
+
+  // Si l'utilisateur est déjà connecté et essaie d'accéder à login/register
+  if (authStore.isAuthenticated && (to.name === 'login' || to.name === 'register')) {
+    next({ name: 'home' });
+    return;
+  }
+
+  next();
+});
 
 export default router

@@ -1,5 +1,8 @@
 <script setup>
 import { ref, defineProps, defineEmits } from 'vue';
+import { useCartStore } from '@/stores/cart';
+
+const cartStore = useCartStore();
 
 const props = defineProps({
   cartItems: {
@@ -13,6 +16,19 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['submit-order', 'close']);
+
+const removeItem = (itemId) => {
+  cartStore.decreaseItemQuantity(itemId);
+  // If cart becomes empty after removing item, close the modal
+  if (cartStore.itemCount === 0) {
+    emit('close');
+  }
+};
+
+const cancelOrder = () => {
+  cartStore.clearCart();
+  emit('close');
+};
 
 const submitOrder = () => {
   emit('submit-order', {
@@ -30,9 +46,15 @@ const submitOrder = () => {
       <div class="order-summary">
         <h3>Résumé de votre commande</h3>
         <div class="order-items">
+          <div v-if="cartItems.length === 0" class="empty-cart-message">
+            Votre panier est vide.
+          </div>
           <div v-for="item in cartItems" :key="item.id" class="order-item">
-            <span>{{ item.designation }} x {{ item.quantity }}</span>
-            <span>{{ item.formatPrice() }}</span>
+            <div class="item-details">
+              <span>{{ item.designation }} x {{ item.quantity }}</span>
+              <span>{{ cartStore.formatPrice(item.price * item.quantity) }}</span>
+            </div>
+            <button @click="removeItem(item.id)" class="remove-item-button">Retirer</button>
           </div>
         </div>
         <div class="order-total">
@@ -43,8 +65,8 @@ const submitOrder = () => {
 
       <form @submit.prevent="submitOrder" class="delivery-form">
         <div class="form-actions">
-          <button type="button" class="cancel-button" @click="emit('close')">Annuler</button>
-          <button type="submit" class="submit-button">Payer avec Wave</button>
+          <button type="button" class="cancel-button" @click="cancelOrder">Annuler la commande</button>
+          <button type="submit" class="submit-button" :disabled="cartItems.length === 0">Payer avec Wave</button>
         </div>
       </form>
     </div>
@@ -94,6 +116,35 @@ const submitOrder = () => {
   color: var(--gray-500);
 }
 
+.item-details {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.remove-item-button {
+  background-color: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.8em;
+  margin-left: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.remove-item-button:hover {
+  background-color: var(--danger);
+  color: var(--white);
+}
+
+.empty-cart-message {
+  text-align: center;
+  padding: 1rem;
+  color: var(--gray-500);
+}
+
 .order-total {
   display: flex;
   justify-content: space-between;
@@ -110,6 +161,35 @@ const submitOrder = () => {
 label {
   display: block;
   margin-bottom: 0.5rem;
+  color: var(--gray-500);
+}
+
+.item-details {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.remove-item-button {
+  background-color: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.8em;
+  margin-left: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.remove-item-button:hover {
+  background-color: var(--danger);
+  color: var(--white);
+}
+
+.empty-cart-message {
+  text-align: center;
+  padding: 1rem;
   color: var(--gray-500);
 }
 
@@ -150,6 +230,35 @@ button {
   color: var(--gray-500);
 }
 
+.item-details {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.remove-item-button {
+  background-color: var(--danger-light);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.8em;
+  margin-left: 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.remove-item-button:hover {
+  background-color: var(--danger);
+  color: var(--white);
+}
+
+.empty-cart-message {
+  text-align: center;
+  padding: 1rem;
+  color: var(--gray-500);
+}
+
 .cancel-button:hover {
   background-color: var(--gray-300);
 }
@@ -161,5 +270,10 @@ button {
 
 .submit-button:hover {
   background-color: var(--green-400);
+}
+
+.submit-button:disabled {
+  background-color: var(--gray-300);
+  cursor: not-allowed;
 }
 </style>

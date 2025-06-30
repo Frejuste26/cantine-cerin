@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useRouter } from 'vue-router';
+import OrderService from '@/services/order';
 
 const authStore = useAuthStore();
 const router = useRouter();
@@ -9,6 +10,38 @@ const router = useRouter();
 const orders = ref([]);
 const isLoading = ref(false);
 const error = ref(null);
+const cancellingOrder = ref(null);
+
+const loadOrders = async () => {
+  try {
+    isLoading.value = true;
+    error.value = null;
+    orders.value = await OrderService.getUserOrders();
+  } catch (err) {
+    error.value = 'Erreur lors du chargement de l\'historique des commandes';
+    console.error(err);
+  } finally {
+    isLoading.value = false;
+  }
+};
+
+const cancelOrder = async (orderId) => {
+  if (!confirm('Êtes-vous sûr de vouloir annuler cette commande ?')) {
+    return;
+  }
+
+  try {
+    cancellingOrder.value = orderId;
+    await OrderService.cancelOrder(orderId);
+    // Recharger les commandes pour refléter le changement
+    await loadOrders();
+  } catch (err) {
+    error.value = 'Erreur lors de l\'annulation de la commande';
+    console.error(err);
+  } finally {
+    cancellingOrder.value = null;
+  }
+};
 
 onMounted(async () => {
   if (!authStore.isAuthenticated) {
@@ -16,16 +49,7 @@ onMounted(async () => {
     return;
   }
 
-  try {
-    isLoading.value = true;
-    // TODO: Implémenter la récupération des commandes de l'utilisateur
-    // orders.value = await OrderService.getUserOrders();
-  } catch (err) {
-    error.value = 'Erreur lors du chargement de l\'historique des commandes';
-    console.error(err);
-  } finally {
-    isLoading.value = false;
-  }
+  await loadOrders();
 });
 
 const formatDate = (date) => {
@@ -120,8 +144,10 @@ const getStatusText = (status) => {
             v-if="order.status === 'pending'"
             @click="cancelOrder(order.id)"
             class="cancel-button"
+            :disabled="cancellingOrder === order.id"
           >
-            Annuler la commande
+            <span v-if="cancellingOrder === order.id" class="spinner"></span>
+            {{ cancellingOrder === order.id ? 'Annulation...' : 'Annuler la commande' }}
           </button>
         </div>
       </div>
@@ -339,5 +365,27 @@ const getStatusText = (status) => {
   .cancel-button {
     width: 100%;
   }
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.cancel-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

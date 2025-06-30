@@ -56,13 +56,7 @@ const handleSearch = () => {
         Se connecter
       </button>
       
-      <button 
-        v-if="!isAuthenticated" 
-        class="auth-button register"
-        @click="$router.push('/register')"
-      >
-        S'inscrire
-      </button>
+
     </div>
   </nav>
 </template>

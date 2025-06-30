@@ -1,28 +1,36 @@
 <script setup>
-import { ref } from 'vue'
+import { computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import { useRouter } from 'vue-router'
 
-const userData = ref({
-  lastname: 'Doe',
-  firstname: 'John',
-  phone: '+33 6 12 34 56 78',
-  email: 'john.doe@example.com',
-  username: 'johndoe'
-})
+const authStore = useAuthStore()
+const router = useRouter()
+
+const userData = computed(() => authStore.user || {})
+
+const handleEditProfile = () => {
+  router.push('/profile/edit')
+}
 </script>
 
 <template>
   <main id="profile-container">
-    <h1>Mon Profil</h1>
+    <div class="profile-header">
+      <h1>Mon Profil</h1>
+      <button @click="handleEditProfile" class="btn btn-primary">
+        Modifier mon profil
+      </button>
+    </div>
 
     <div class="profile-section">
       <h3>Informations personnelles</h3>
       <div class="info-group">
         <label>Nom</label>
-        <p>{{ userData.lastname }}</p>
+        <p>{{ userData.lastname || 'Non renseigné' }}</p>
       </div>
       <div class="info-group">
         <label>Prénom</label>
-        <p>{{ userData.firstname }}</p>
+        <p>{{ userData.firstname || 'Non renseigné' }}</p>
       </div>
     </div>
 
@@ -30,11 +38,11 @@ const userData = ref({
       <h3>Coordonnées</h3>
       <div class="info-group">
         <label>Téléphone</label>
-        <p>{{ userData.phone }}</p>
+        <p>{{ userData.phone || 'Non renseigné' }}</p>
       </div>
       <div class="info-group">
         <label>Email</label>
-        <p>{{ userData.email }}</p>
+        <p>{{ userData.email || 'Non renseigné' }}</p>
       </div>
     </div>
 
@@ -42,7 +50,11 @@ const userData = ref({
       <h3>Identifiants</h3>
       <div class="info-group">
         <label>Nom d'utilisateur</label>
-        <p>{{ userData.username }}</p>
+        <p>{{ userData.username || 'Non renseigné' }}</p>
+      </div>
+      <div class="info-group">
+        <label>Type de compte</label>
+        <p>{{ userData.type === 'admin' ? 'Administrateur' : 'Utilisateur' }}</p>
       </div>
     </div>
   </main>
@@ -55,10 +67,54 @@ const userData = ref({
   padding: 0 1rem;
 }
 
-h1 {
-  text-align: center;
-  color: #2c3e50;
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+h1 {
+  color: #2c3e50;
+  margin: 0;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #0056b3;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .profile-section {

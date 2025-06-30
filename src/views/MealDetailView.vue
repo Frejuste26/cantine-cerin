@@ -26,7 +26,14 @@ const fetchMealDetails = async () => {
   try {
     loading.value = true;
     const mealData = await Meal.getById(route.params.id);
+    
+    // Vérifier si le repas est dans les favoris
+    const storedFavorites = localStorage.getItem('mealFavorites');
+    const favorites = storedFavorites ? JSON.parse(storedFavorites) : [];
+    mealData.isFavorite = favorites.includes(mealData.id);
+    
     meal.value = mealData;
+    
     // Simuler le chargement des informations nutritionnelles
     nutritionalInfo.value = {
       calories: 650,
@@ -35,6 +42,7 @@ const fetchMealDetails = async () => {
       fats: 15,
       allergens: ['Gluten', 'Lait']
     };
+    
     // Simuler le chargement des avis
     reviews.value = [
       { id: 1, username: 'Sophie', rating: 5, comment: 'Délicieux ! Un de mes plats préférés.', date: '2024-01-15' },
@@ -61,8 +69,29 @@ const submitReview = async () => {
 };
 
 const toggleFavorite = async () => {
-  // TODO: Implémenter la gestion des favoris
+  if (!meal.value) return;
+  
   meal.value.isFavorite = !meal.value.isFavorite;
+  
+  // Récupérer les favoris actuels du localStorage
+  const storedFavorites = localStorage.getItem('mealFavorites');
+  let favorites = storedFavorites ? JSON.parse(storedFavorites) : [];
+  
+  if (meal.value.isFavorite) {
+    // Ajouter aux favoris s'il n'y est pas déjà
+    if (!favorites.includes(meal.value.id)) {
+      favorites.push(meal.value.id);
+    }
+  } else {
+    // Retirer des favoris
+    const index = favorites.indexOf(meal.value.id);
+    if (index !== -1) {
+      favorites.splice(index, 1);
+    }
+  }
+  
+  // Sauvegarder dans localStorage
+  localStorage.setItem('mealFavorites', JSON.stringify(favorites));
 };
 
 onMounted(() => {
@@ -198,6 +227,35 @@ onMounted(() => {
   height: 50px;
   border: 4px solid var(--gray-200);
   border-top-color: var(--primary);
+}
+
+/* Style pour le bouton de favoris */
+.favorite-button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.favorite-button:hover {
+  transform: scale(1.1);
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.meal-title-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-md);
+}
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
