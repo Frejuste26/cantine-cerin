@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = 'https://api.wave.com/v1/checkout/sessions';
+const API_URL = '/api/wave/v1/checkout/sessions';
 const API_KEY = 'wave_ci_prod_gG3Ba6CcWRBNr1CBKDh2YseMcms1XsikRXwf3Yw3z4Lgwj6HqfDjxDiQpw4nT8JnApR8HR59MWxqrvwDNIQd7Ymsfr-Atj8VuA'; // This key is for demonstration only and should not be used in production.
 
 export default {
